@@ -1,0 +1,34 @@
+\documentclass{article}
+
+\usepackage{colortbl,dcolumn}
+
+\def\zz#1{%
+%\ifdim#1pt<0pt\cellcolor{green}\else
+\ifdim#1pt<50pt\cellcolor{yellow}\else
+\cellcolor{red}\fi\fi
+#1}
+
+
+\begin{document}
+
+\begin{tabular}{*3{D,,{2.2}}c}
+\zz {1,2} &\zz  {3,04}  &\zz {5,44}  \\
+\zz {1,01}&\zz {77,5}  &\zz {77,94} \\
+\zz {3,42}&\zz   {4,04} &\zz {51,04} 
+\end{tabular}
+
+
+\def\zz#1{%
+\ifdim#1pt<5pt\cellcolor{green}\else
+\ifdim#1pt<50pt\cellcolor{yellow}\else
+\cellcolor{red}\fi\fi
+#1}
+
+
+\begin{tabular}{*3{D,,{2.2}}c}
+\zz {1,2} &\zz  {3,04}  &\zz {5,44}  \\
+\zz {1,01}&\zz {77,5}  &\zz {77,94} \\
+\zz {3,42}&\zz   {4,04} &\zz {51,04} 
+\end{tabular}
+
+\end{document}
