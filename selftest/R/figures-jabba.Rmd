@@ -2,7 +2,7 @@
 title: "Data poor validation" 
 subtitle: "JABBA MP: ICCAT SS & JABBA OM"
 author: "Laurence Kell"
-output: rmarkdown:::word_document
+output: rmarkdown:::pdf_document
 vignette: >
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteIndexEntry{Vignette Title}
