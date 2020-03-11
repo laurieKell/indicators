@@ -1,0 +1,421 @@
+---
+title: "Data poor validation" 
+subtitle: "Myers data"
+author: "Laurence Kell"
+output: rmarkdown:::word_document
+vignette: >
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEncoding{UTF-8}
+tags: FLPKG FLR
+license: Creative Commons Attribution-ShareAlike 4.0 International
+---
+  
+```{r knitr_init, echo=FALSE, results="hide"}
+library(knitr)
+## Global options
+opts_chunk$set(echo    =FALSE,
+               eval    =TRUE,
+               cache   =TRUE,
+               cache.path="../cache/myers/",
+               prompt  =FALSE,
+               comment =NA,
+               message =FALSE,
+               tidy    =FALSE,
+               warning =FALSE,
+               fig.height=6,
+               fig.width =6,
+               fig.path  ="../tex/myers-",
+               dev       ="png")
+
+options(digits=3)
+
+iFig=0
+```
+
+```{r, pkgs, echo=FALSE, message=FALSE}
+library(reshape)
+library(plyr)
+library(dplyr)
+library(GGally)
+```
+
+```{r, data, fig.height=6, fig.width=6}
+dirMy="/home/laurence-kell/Desktop/papers/data-poor"
+
+load(file.path(dirMy,"data/myers.RData"))
+load(file.path(dirMy,"results/myersRuns.RData"))
+
+bbmsy=subset(runs,variable=="b_div_bmsy")
+bbmsy=cast(bbmsy,assessid+year~run,value="mean")
+
+bbmsy=merge(bbmsy,myers,by=c("assessid","year"))
+```
+
+```{r}
+save(bbmsy,file="/home/laurence-kell/Desktop/rfmo/iccat/sc-eco/2020/papers/scrs2020-unassessed/data/bbmsy.RData")
+```
+
+```{r, trend}
+trnd=ddply(bbmsy[,c("assessid","biomass","bd","bd4","sra","dan")],.(assessid),transform, 
+                                                                             biomass=biomass/mean(biomass,na.rm=T),
+                                                                             bd     =bd/mean(     bd,na.rm=T),
+                                                                             bd4    =bd4/mean(    bd4,na.rm=T),
+                                                                             sra    =sra/mean(    sra,na.rm=T),
+                                                                             dan    =dan/mean(    dan,na.rm=T))[,-1]
+           
+my_lower<-function(data,mapping,...){
+  ggplot(data=data,mapping=mapping)+
+    #geom_smooth(method="lm",se=FALSE,fullrange=TRUE)+
+    geom_point(...)+
+    scale_shape_manual(values=c(0,1))}
+
+my_density<-function(data,mapping,...){
+  ggplot(data=data,mapping=mapping)+
+    geom_density(...,lwd=1)}
+
+ggpairs(log(trnd),columns=1:5,
+           #mapping=aes(color=smoke,shape=sex,lty=sex),
+           columnLabels=c("True\nAbundance","Biomass\nDynamic","BD with 40% CV","SRA","SRA Dan"),
+           lower=list(continuous=wrap(my_lower,alpha=0.25,fill="black")),
+           diag=list(continuous=wrap(my_density,alpha=0.5)),
+           upper=list(continuous=wrap("cor",size=4)))+
+          theme_bw()
+```
+
+**Figure `r iFig=iFig+1; iFig`** Correlations between trends over entire series. 
+
+```{r, regression}
+trend<-function(x,n=10){
+    
+    if (length(x)<n) return(NA)
+    
+    y=x[length(x)-(n:1)+1]
+    
+    if (any(is.na(x))) return(NA)
+    
+    lm(y~x,data=data.frame(x=seq(n),y=y))$coef[2]}
+
+trd10=ddply(bbmsy, .(assessid), with, data.frame(
+                                         biomass=trend(biomass),
+                                         bd     =trend(bd),
+                                         bd4    =trend(bd4),
+                                         sra    =trend(sra)))
+
+ggpairs(trd10[,-1],
+           columnLabels=c("True\nAbundance","Biomass\nDynamic","BD with 40% CV","SRA"),
+           lower=list(continuous=wrap(my_lower,alpha=0.25,fill="black")),
+           diag=list(continuous=wrap(my_density,alpha=0.5)),
+           upper=list(continuous=wrap("cor",size=4)))+
+          theme_bw()
+```
+
+**Figure `r iFig=iFig+1; iFig`** Correlations between trends in last 10 years. 
+
+
+```{r, trend-5}
+trd5=ddply(bbmsy, .(assessid), with, data.frame(
+                                         biomass=trend(biomass,5),
+                                         bd     =trend(bd,     5),
+                                         bd4    =trend(bd4,    5),
+                                         sra    =trend(sra,    5)))
+
+ggpairs(trd5[,-1],
+           columnLabels=c("True\nAbundance","Biomass\nDynamic","BD with 40% CV","SRA"),
+           lower=list(continuous=wrap(my_lower,alpha=0.25,fill="black")),
+           diag=list(continuous=wrap(my_density,alpha=0.5)),
+           upper=list(continuous=wrap("cor",size=4)))+
+          theme_bw()
+```
+
+**Figure `r iFig=iFig+1; iFig`** Correlations between trends in last 5 years. 
+
+
+```{r, 2o3}
+twothree<-function(x,n1=2,n2=3){
+  
+  if (length(x)<n1+n2) return(NULL)
+  
+  mean(x[length(x)-seq(n1)+1])/mean(x[length(x)-(n1+n2):n2+1])}
+
+t23=ddply(bbmsy, .(assessid), with, data.frame(
+                                          biomass=twothree(biomass),
+                                          bd     =twothree(bd),
+                                          bd4    =twothree(bd4),
+                                          sra    =twothree(sra)))
+
+
+ggpairs(t23[,-1],
+           columnLabels=c("True\nAbundance","Biomass\nDynamic","BD with 40% CV","SRA"),
+           lower=list(continuous=wrap(my_lower,alpha=0.25,fill="black")),
+           diag=list(continuous=wrap(my_density,alpha=0.5)),
+           upper=list(continuous=wrap("cor",size=4)))+
+          theme_bw()
+```
+
+**Figure `r iFig=iFig+1; iFig`** Comparison of ICES 2 over 3 rule, i.e. mean of last 2 years divided by mean in years -5 to -3. 
+
+
+```{r, dplt-final}
+fnl=ddply(bbmsy, .(assessid), function(x) x[x$year==max(x$year),])
+
+ggpairs(log(fnl[,c("biomass","bd","bd4","sra")]),
+           columnLabels=c("True\nAbundance","Biomass\nDynamic","BD with 40% CV","SRA"),
+           lower=list(continuous=wrap(my_lower,alpha=0.25,fill="black")),
+           diag=list(continuous=wrap(my_density,alpha=0.5)),
+           upper=list(continuous=wrap("cor",size=4)))+
+          theme_bw()
+```
+
+**Figure `r iFig=iFig+1; iFig`** Comparison of depeletion estimates in final year. 
+
+```{r}
+save(fnl,  file="/home/laurence-kell/Desktop/tmp/fnl.RData")
+save(t23,  file="/home/laurence-kell/Desktop/tmp/t23.RData") 
+save(trd5, file="/home/laurence-kell/Desktop/tmp/trd5.RData")
+save(trd10,file="/home/laurence-kell/Desktop/tmp/trd10.RData")
+```
+
+```{r}
+load("/home/laurence-kell/Desktop/tmp/fnl.RData")
+load("/home/laurence-kell/Desktop/tmp/t23.RData") 
+load("/home/laurence-kell/Desktop/tmp/trd5.RData")
+load("/home/laurence-kell/Desktop/tmp/trd10.RData")
+```
+
+\newpage
+Tables
+```{r}
+c("Trend 5","","Trend10","","2 over 3","","Final","")
+cbind(with(trd5, table(bd4<0,biomass<0)),
+      with(trd10,table(bd4<0,biomass<0)),
+      with(t23,  table(bd4<1,biomass<1)),
+      with(fnl,  table(bd4<1,biomass<1)))
+c("",signif(fisher.test(with(trd5, table(bd4<0,biomass<0)))$p,4),
+  "",signif(fisher.test(with(trd10,table(bd4<0,biomass<0)))$p,4),
+  "",signif(fisher.test(with(t23,  table(bd4<1,biomass<1)))$p,4),
+  "",signif(fisher.test(with(fnl,  table(bd4<1,biomass<1)))$p,4))
+```
+
+```{r}
+c("Trend 5","","Trend10","","2 over 3","","Final","")
+cbind(with(trd5, table(sra<0,biomass<0)),
+      with(trd10,table(sra<0,biomass<0)),
+      with(t23,  table(sra<1,biomass<1)),
+      with(fnl,  table(sra<1,biomass<1)))
+c("",signif(fisher.test(with(trd5, table(sra<0,biomass<0)))$p,4),
+  "",signif(fisher.test(with(trd10,table(sra<0,biomass<0)))$p,4),
+  "",signif(fisher.test(with(t23,  table(sra<1,biomass<1)))$p,4),
+  "",signif(fisher.test(with(fnl,  table(sra<1,biomass<1)))$p,4))
+```
+
+
+```{r, cv}
+cvFn=function(x) (var(x,na.rm=TRUE)^1/2)/mean(x,na.rm=TRUE)
+```
+
+
+```{r}
+chk=ddply(fnl[,c(1,4:6)],.(assessid),with,data.frame(flag=!is.na(bd4)&!is.na(sra)))
+
+cat=transmute(fnl,catsra  =paste("OM=",biomass>1," MP=",sra>1,sep=""),
+                  catbd   =paste("OM=",biomass>1," MP=",bd4>1,sep=""),
+                  assessid=assessid)
+bb =merge(bbmsy,cat)
+bb =subset(bb,assessid%in%subset(chk,flag)[,1])
+bb =ddply(bb,.(assessid), transform, catch=catch/mean(catch))
+
+
+bb =melt(bb[,c("assessid","year","sra","bd4","biomass","catch","catsra","catbd")],id=c("assessid","year","catsra","catbd"))
+
+bb$catsra=factor(bb$catsra,levels=c("OM=TRUE MP=TRUE", "OM=FALSE MP=FALSE",
+                                    "OM=TRUE MP=FALSE","OM=FALSE MP=TRUE"))
+bb$catbd =factor(bb$catbd, levels=c("OM=TRUE MP=TRUE", "OM=FALSE MP=FALSE",
+                                    "OM=TRUE MP=FALSE","OM=FALSE MP=TRUE"))
+
+dat=subset(bb,catbd=="OM=TRUE MP=TRUE")
+dat=subset(dat,assessid%in%sample(unique(dat$assessid),10))
+
+ggplot(dat)+
+  geom_line(aes(year,value,group=assessid,col=catsra))+
+  facet_grid(variable~.,scale="free")+
+  theme(legend.position="bottom")
+```
+
+**Figure `r iFig=iFig+1; iFig`** BD T*T
+
+
+```{r}
+dat=subset(bb,catbd=="OM=FALSE MP=FALSE")
+dat=subset(dat,assessid%in%sample(unique(dat$assessid),10))
+
+ggplot(dat)+
+  geom_line(aes(year,value,group=assessid,col=catsra))+
+  facet_grid(variable~.,scale="free")+
+  theme(legend.position="bottom")
+```
+
+**Figure `r iFig=iFig+1; iFig`** BD F*F
+
+
+```{r}
+dat=subset(bb,catbd=="OM=TRUE MP=FALSE")
+dat=subset(dat,assessid%in%sample(unique(dat$assessid),10))
+
+ggplot(dat)+   
+  geom_line(aes(year,value,group=assessid,col=catsra))+
+  facet_grid(variable~.,scale="free")+
+  theme(legend.position="bottom")
+```
+
+**Figure `r iFig=iFig+1; iFig`** BD T*F
+
+
+```{r}
+dat=subset(bb,catbd=="OM=FALSE MP=TRUE")
+dat=subset(dat,assessid%in%sample(unique(dat$assessid),10))
+
+ggplot(dat)+ 
+  geom_line(aes(year,value,group=assessid,col=catsra))+
+  facet_grid(variable~.,scale="free")+
+  theme(legend.position="bottom")
+```
+
+**Figure `r iFig=iFig+1; iFig`** BD F*T
+
+```{r, eval=FALSE}
+save(bbmsy,file="/home/laurence-kell/Desktop/tmp/bbmsy.RData")
+```
+
+```{r, fao, fig.height=8}
+orn=transform(melt(bbmsy[,c(1:4,6)],id=c("assessid","year")),value=value<1.2)
+red=transform(melt(bbmsy[,c(1:4,6)],id=c("assessid","year")),value=value<0.8)
+
+orn=ddply(subset(orn,!is.na(value)),.(year,variable), with, mean(as.numeric(value)))
+red=ddply(subset(red,!is.na(value)),.(year,variable), with, mean(as.numeric(value)))
+
+ggplot()+
+  geom_ribbon(aes(year,ymin=0,ymax=1), fill="green",  data=red)+
+  geom_ribbon(aes(year,ymin=0,ymax=V1),fill="orange", data=orn)+
+  geom_ribbon(aes(year,ymin=0,ymax=V1),fill="red",    data=red)+
+  facet_grid(variable~.)+
+  scale_x_continuous(lim=c(1980,2015))+
+  xlab("Year")+ylab("Probability")
+```
+
+**Figure `r iFig=iFig+1; iFig`** Comparisons of stock status using FAO criteria for the different approaches
+
+
+```{r, class1, fig.height=4}
+dt1=melt(subset(bbmsy[,c(1:4,6,8)],biomass>=1.2),id=c("assessid","year"))
+dt1=ddply(dt1,.(year,variable), with, mean(as.numeric(value>1.2),na.rm=TRUE))
+
+ggplot(subset(dt1,year>1980&variable!="biomass"))+
+  geom_hline(aes(yintercept=0.5),col="red")+
+  geom_line(aes(year,V1,col=variable))+
+  xlab("Year")+ylab("P(Biomass >= 1.2 & Estimate >= 1.2")+
+  theme(legend.position="bottom")+theme_bw()
+```
+
+**Figure `r iFig=iFig+1; iFig`** Comparisons of classification of B>=1.2 of each method
+
+
+```{r, class2, fig.height=4}
+dt1=melt(subset(bbmsy[,c(1:4,6,8)],biomass<1.2),id=c("assessid","year"))
+dt1=ddply(dt1,.(year,variable), with, mean(as.numeric(value<1.2),na.rm=TRUE))
+
+ggplot(subset(dt1,year>1980&variable!="biomass"))+
+  geom_hline(aes(yintercept=0.5),col="red")+
+  geom_line(aes(year,V1,col=variable))+
+  geom_hline(aes(yintercept=0.5),col="red")+
+  xlab("Year")+ylab("P(Biomass < 1.2 & Estimate < 1.2")+
+  theme(legend.position="bottom")+theme_bw()
+```
+
+**Figure `r iFig=iFig+1; iFig`** Comparisons of classification of B<1.2 of each method
+
+
+```{r, class3, fig.height=4}
+dt1=melt(subset(bbmsy[,c(1:4,6,8)],biomass>=0.8),id=c("assessid","year"))
+dt1=ddply(dt1,.(year,variable), with, mean(as.numeric(value>=0.8),na.rm=TRUE))
+
+ggplot(subset(dt1,year>1980&variable!="biomass"))+
+  geom_hline(aes(yintercept=0.5),col="red")+
+  geom_line(aes(year,V1,col=variable))+
+  xlab("Year")+ylab("P(Biomass >= 0.8 & Estimate >= 0.8")+
+  theme(legend.position="bottom")+theme_bw()
+```
+
+**Figure `r iFig=iFig+1; iFig`** Comparisons of classification of B>=0.8 of each method
+
+
+```{r, class4, fig.height=4}
+dt1=melt(subset(bbmsy[,c(1:4,6,8)],biomass<=0.8),id=c("assessid","year"))
+dt1=ddply(dt1,.(year,variable), with, mean(as.numeric(value<=0.8),na.rm=TRUE))
+
+ggplot(subset(dt1,year>1980&variable!="biomass"))+
+  geom_hline(aes(yintercept=0.5),col="red")+
+  geom_line(aes(year,V1,col=variable))+
+  xlab("Year")+ylab("P(Biomass <= 0.8 & Estimate <= 0.8")+
+  theme(legend.position="bottom")+theme_bw()
+```
+
+
+**Figure `r iFig=iFig+1; iFig`** Comparisons of classification of B<=0.8 of each method
+
+
+```{r, eval=FALSE}
+###To assess the status of all and compare these
+sbiomass=bbmsy$biomass
+
+bd4=ddply(bbmsy,.(year,assessid), with, bbmsy$bd4>0.8)
+
+for(i in 1:dim(bbmsy)[1])
+  if (bbmsy$biomass[i]<0.8) {sbiomass[i]<-0} else{if(bbmsy$biomass[i]>1.2){sbiomass[i]<-2}else{{sbiomass[i]<-1}}}
+
+sbd<-bbmsy$bd
+sbd4<-bbmsy$bd4
+ssra<-bbmsy$sra
+nbd<-bbmsy$bd
+nbd4<-bbmsy$bd4
+nsra<--bbmsy$sra
+nbd<-ifelse(is.na(nbd) == TRUE, 1, nbd)
+nbd4<-ifelse(is.na(nbd4) == TRUE, 1, nbd4)
+nsra<-ifelse(is.na(ssra) == TRUE, 1, ssra)
+
+for(i in 1:dim(bbmsy)[1])
+  if (nbd[i]<0.8){sbd[i]<-0} else{if(nbd[i]>1.2){sbd[i]<-2}else{if(nbd[i]==1){sbd[i]<-3}else{sbd[i]<-1}}}
+
+for(i in 1:dim(bbmsy)[1])
+  if (nbd4[i]<0.8){sbd4[i]<-0} else{if(nbd4[i]>1.2){sbd4[i]<-2}else{if(nbd4[i]==1){sbd4[i]<-3}else{sbd4[i]<-1}}}
+
+for(i in 1:dim(bbmsy)[1])
+  if (nsra[i]<0.8){ssra[i]<-0} else{if(nsra[i]>1.2){ssra[i]<-2}else{if(nsra[i]==1){ssra[i]<-3}else{ssra[i]<-1}}}
+
+status<-data.frame(year=bbmsy$year,
+                   stock=bbmsy$stockid,
+                   bd=sbiomass,
+                   bd4=sbd,sbd4,
+                   sra=ssra)
+
+colnames(status) <- c("Year","Stock","SBio", "STrueAI", "SAIerror","SSRA")
+#out<-write.csv(status,file=paste("Myersstatus",".csv", sep=""))
+```
+
+
+```{r, eval=FALSE}
+library(kobe)
+
+fnl=subset(fnl,!is.na(bd4)&!is.na(biomass))
+kobe:::kobePhaseMar2(mutate(fnl,stock=bd4,harvest=biomass,run=paste(bd4>1,biomass>1)),ylim=c(0,4),xlim=c(0,4))+
+  geom_point(aes(stock,harvest,col=run))
+```
+
+
+```{r, eval=FALSE}
+library(kobe)
+
+fnl=subset(fnl,!is.na(bd4)&!is.na(biomass))
+kobe:::kobePhaseMar2(mutate(fnl,stock=sra,harvest=biomass,run=paste(sra>1,biomass>1)),ylim=c(0,4),xlim=c(0,4))+
+  geom_point(aes(stock,harvest,col=run))
+```

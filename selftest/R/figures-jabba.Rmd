@@ -1,0 +1,627 @@
+---
+title: "Data poor validation" 
+subtitle: "JABBA MP: ICCAT SS & JABBA OM"
+author: "Laurence Kell"
+output: rmarkdown:::word_document
+vignette: >
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEncoding{UTF-8}
+tags: FLPKG FLR
+license: Creative Commons Attribution-ShareAlike 4.0 International
+---
+  
+```{r knitr_init, echo=FALSE, results="hide"}
+library(knitr)
+## Global options
+opts_chunk$set(echo    =FALSE,
+               eval    =TRUE,
+               cache   =TRUE,
+               cache.path="../cache/",
+               prompt  =FALSE,
+               comment =NA,
+               message =FALSE,
+               tidy    =FALSE,
+               warning =FALSE,
+               fig.height=6,
+               fig.width =6,
+               fig.path  ="../tex/jabba",
+               dev       ="png")
+
+options(digits=3)
+
+iFig=0
+```
+
+```{r, pkgs, echo=FALSE, message=FALSE}
+library(reshape)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+
+library(sraplus)
+```
+
+```{r, data, fig.height=6, fig.width=6}
+load("/home/laurence-kell/Desktop/rfmo/iccat/inputs/jabba/jabbaiccat.RData")
+
+jabbaiccat=jabbaiccat[sort(names(jabbaiccat))]
+names(jabbaiccat)[3]="swo"
+
+spp=c("Thunnus obesus",
+      "Kajikia albida",
+      "Xiphias gladius",
+      "Makaira nigricans",
+      "Thunnus albacares")
+names(spp)=names(jabbaiccat)
+jb=ldply(jabbaiccat,function(x)
+       data.frame(year=x$timeseries$year,b=x$timeseries$ssb,b_div_bmsy=x$timeseries$ssb/x$refpts$bmsy[1]))
+names(jb)[1]="stk"
+```
+
+
+```{r, bd, eval=!FALSE}
+bds=mlply(data.frame(stk=names(spp)), function(stk){  
+  
+  x=jabbaiccat[[stk]]
+  
+  cdp<-try(sraplus::format_driors(
+    use_heuristics=!TRUE,
+    taxa          =spp[stk],
+    
+    index      = x$timeseries$ssb,
+    index_year = x$timeseries$year,
+    catch      = x$timeseries$catch,
+    years      = x$timeseries$year
+    ))
+  
+  fit<-try(sraplus::fit_sraplus(
+    driors = cdp,      
+    engine = "tmb",
+    model  = "sraplus_tmb",
+    estimate_qslope = FALSE,
+    estimate_proc_error = TRUE))
+
+  if ("try-error"%in%is(fit)) return(NULL)
+  
+  fit})
+
+save(bds,file="../results/jabbaBDResults.RData")
+```
+
+
+```{r, bd10, eval=!FALSE}
+bd10=mlply(data.frame(stk=names(spp)), function(stk){
+  
+  x=jabbaiccat[[stk]]  
+  x$timeseries=subset(x$timeseries,year>=max(year)-9)
+  
+  cdp<-try(sraplus::format_driors(
+    use_heuristics=!TRUE,
+    taxa          =spp[stk],
+    
+    index      = x$timeseries$ssb,
+    index_year = x$timeseries$year,
+    catch      = x$timeseries$catch,
+    years      = x$timeseries$year
+    ))
+  
+  fit<-try(sraplus::fit_sraplus(
+    driors = cdp,      
+    engine = "tmb",
+    model  = "sraplus_tmb",
+    estimate_qslope = FALSE,
+    estimate_proc_error = TRUE))
+
+  if ("try-error"%in%is(fit)) return(NULL)
+  
+  fit})
+
+
+save(bd10,file="../results/jabbaBD10Results.RData")
+```
+
+```{r, bd4, eval=!FALSE}
+bd4=mlply(data.frame(stk=names(spp)), function(stk){
+  
+  x=jabbaiccat[[stk]]
+
+  x$timeseries=subset(x$timeseries,year>=1960)
+
+  set.seed(4567)  
+  
+  cdp<-try(sraplus::format_driors(
+    use_heuristics=!TRUE,
+    taxa          =spp[stk],
+    
+    index      = x$timeseries$ssb*rev(rlnorm(length(x$timeseries$ssb),0,0.4)),
+    index_year = x$timeseries$year,
+    catch      = x$timeseries$catch,
+    years      = x$timeseries$year
+    ))
+  
+  fit<-try(sraplus::fit_sraplus(
+    driors = cdp,      
+    engine = "tmb",
+    model  = "sraplus_tmb",
+    estimate_qslope = FALSE,
+    estimate_proc_error = TRUE))
+
+  if ("try-error"%in%is(fit)) return(NULL)
+  
+  fit})
+
+save(bd4,file="../results/jabbaBD4Results.RData")
+```
+
+```{r, bd410, eval=!FALSE}
+bd410=mlply(data.frame(stk=names(spp)), function(stk){
+  
+  x=jabbaiccat[[stk]]
+  x$timeseries=subset(x$timeseries,year>=max(year)-9)
+  
+  set.seed(4567)  
+  
+  cdp<-try(sraplus::format_driors(
+    use_heuristics=!TRUE,
+    taxa          =spp[stk],
+    
+    index      = x$timeseries$ssb*rev(rlnorm(length(x$timeseries$ssb),0,0.4)),
+    index_year = x$timeseries$year,
+    catch      = x$timeseries$catch,
+    years      = x$timeseries$year
+    ))
+  
+  fit<-try(sraplus::fit_sraplus(
+    driors = cdp,      
+    engine = "tmb",
+    model  = "sraplus_tmb",
+    estimate_qslope = FALSE,
+    estimate_proc_error = TRUE))
+
+  if ("try-error"%in%is(fit)) return(NULL)
+  
+  fit})  
+
+save(bd410,file="../results/jabbaBD410Results.RData")
+```
+
+```{r, sra, eval=!FALSE}
+sras=mlply(data.frame(stk=names(spp)), function(stk){
+  
+  x=jabbaiccat[[stk]]  
+
+  cdp<-try(sraplus::format_driors(
+    use_heuristics=TRUE,
+    taxa          =spp[stk],
+    
+    catch      = x$timeseries$catch,
+    years      = x$timeseries$year
+  ))
+  
+  fit<-try(sraplus::fit_sraplus(
+    driors = cdp,
+    engine = "sir",
+    adapt_delta = 0.9,
+    max_treedepth = 10,
+    n_keep = 4000,
+    chains = 1,
+    cores = 1,
+    estimate_qslope = FALSE,
+    estimate_proc_error = TRUE))
+  
+  if ("try-error"%in%is(fit)) return(NULL)
+  
+  fit})
+
+save(sras,file="../results/jabbaSRAResults.RData")
+```
+
+```{r, sra10, eval=!FALSE}
+sras10=mlply(data.frame(stk=names(spp)), function(stk){
+  
+  x=jabbaiccat[[stk]]  
+  x$timeseries=subset(x$timeseries,year>=max(year)-9)
+  
+  cdp<-try(sraplus::format_driors(
+    use_heuristics=TRUE,
+    taxa          =spp[stk],
+    
+    catch      = x$timeseries$catch,
+    years      = x$timeseries$year
+  ))
+  
+  fit<-try(sraplus::fit_sraplus(
+    driors = cdp,
+    engine = "sir",
+    adapt_delta = 0.9,
+    max_treedepth = 10,
+    n_keep = 4000,
+    chains = 1,
+    cores = 1,
+    estimate_qslope = FALSE,
+    estimate_proc_error = TRUE))
+  
+  if ("try-error"%in%is(fit)) return(NULL)
+  
+  fit})
+
+save(sras10,file="../results/jabbaSRA10Results.RData")
+```
+
+
+```{r, srap, eval=!FALSE}
+srap=mlply(data.frame(stk=names(spp)), function(stk){
+  
+  x=jabbaiccat[[stk]]
+  r=x$pfunc[,"r"]
+  k=x$pfunc[,"k"]
+  p=x$pfunc[,"p"]
+  
+  cdp<-try(sraplus::format_driors(
+    use_heuristics=!TRUE,
+    taxa          =spp[stk],
+    catch         =x$timeseries$catch,
+    years         =x$timeseries$year,
+    
+    shape_prior       =p+1,
+    growth_rate_prior =r,
+    k_prior           =k,
+    initial_state     =0.75, #x$timeseries$ssb[1]/x$refpts[1,"k"],
+    terminal_state    =0.2, #x$timeseries$ssb[length(x$timeseries$ssb)]/x$refpts[1,"k"],
+
+    k_prior_cv          =0.3,
+    growth_rate_prior_cv=0.3,
+    shape_prior_cv      =0.3,
+    initial_state_cv    =0.3,
+    terminal_state_cv   =0.5
+  ))
+  
+  fit<-try(sraplus::fit_sraplus(
+    driors = cdp,
+    engine = "sir",
+    adapt_delta = 0.9,
+    max_treedepth = 10,
+    n_keep = 4000,
+    chains = 1,
+    cores = 1,
+    estimate_qslope = FALSE,
+    estimate_proc_error = TRUE))
+  
+  if ("try-error"%in%is(fit)) return(NULL)
+  
+  fit})
+
+save(srap,file="../results/jabbaSRPResults.RData")
+```
+
+```{r, srap10, eval=!FALSE}
+srap10=mlply(data.frame(stk=names(spp)), function(stk){
+
+  x=jabbaiccat[[stk]]
+  x$timeseries=subset(x$timeseries,year>=max(year)-9)
+  r=x$pfunc[,"r"]
+  k=x$pfunc[,"k"]
+  p=x$pfunc[,"p"]
+  
+  cdp<-try(sraplus::format_driors(
+    use_heuristics=!TRUE,
+    taxa          =spp[stk],
+    catch         =x$timeseries$catch,
+    years         =x$timeseries$year,
+    
+    shape_prior       =p+1,
+    growth_rate_prior =r,
+    k_prior           =k,
+    initial_state     =0.75, #x$timeseries$ssb[1]/x$refpts[1,"k"],
+    terminal_state    =0.2, #x$timeseries$ssb[length(x$timeseries$ssb)]/x$refpts[1,"k"],
+
+    k_prior_cv          =0.3,
+    growth_rate_prior_cv=0.3,
+    shape_prior_cv      =0.3,
+    initial_state_cv    =0.3,
+    terminal_state_cv   =0.5
+  ))
+  
+  fit<-try(sraplus::fit_sraplus(
+    driors = cdp,
+    engine = "sir",
+    adapt_delta = 0.9,
+    max_treedepth = 10,
+    n_keep = 4000,
+    chains = 1,
+    cores = 1,
+    estimate_qslope = FALSE,
+    estimate_proc_error = TRUE))
+  
+  if ("try-error"%in%is(fit)) return(NULL)
+  
+  fit})  
+
+save(srap10,file="../results/jabbaSRP10Results.RData")
+```
+
+```{r, eval=!FALSE}
+library(fishmethods)
+source('~/Desktop/flr/fishmethods/R/catchmsy.R')
+
+cmsy=mlply(data.frame(stk=names(spp)), function(stk){
+
+  x=jabbaiccat[[stk]]
+  r=x$pfunc[,"r"]
+  k=x$pfunc[,"k"]
+  p=x$pfunc[,"p"]
+  
+  catch =x$timeseries$catch
+  year  =x$timeseries$year
+
+  fit<-catchmsy(
+      year   =year,
+      catch  =catch,
+      catchCV=NULL,
+      catargs=list(dist="none",low=0,up=Inf,unit="MT"),
+      l0=list(low=0.1, #max(1,min(x$timeseries$ssb[1]/x$refpts[1,"k"],1),
+              up =0.8, #min(x$timeseries$ssb[1]/x$refpts[1,"k"],1),
+              step=0),
+      lt=list(low  =0.1, #rev(x$timeseries$ssb)[1]/x$refpts[1,"k"]*0.5,
+              up   =0.8, #rev(x$timeseries$ssb)[1]/x$refpts[1,"k"]*2.0,
+              refyr=max(x$timeseries$year)),sigv=0,
+      k=list(dist="unif",low=k*0.1,up=k*10),
+      r=list(dist="unif",low=r*0.1,up=r*10),
+      M=list(dist="unif",mean=0.2,up=0.2,mean=0.00,sd=0.00),
+      nsims=30000,
+      graphs=NULL)
+
+  fit})
+
+save(cmsy,file="../results/jabbaCMSYResults.RData")
+```
+
+```{r, eval=!FALSE}
+cmsy10=mlply(data.frame(stk=names(spp)), function(stk){
+
+  x=jabbaiccat[[stk]]
+  x$timeseries=subset(x$timeseries,year>=max(year)-9)
+  r=x$pfunc[,"r"]
+  k=x$pfunc[,"k"]
+  p=x$pfunc[,"p"]
+  
+  catch =x$timeseries$catch
+  year  =x$timeseries$year
+
+  fit<-catchmsy(
+      year   =year,
+      catch  =catch,
+      catchCV=NULL,
+      catargs=list(dist="none",low=0,up=Inf,unit="MT"),
+      l0=list(low=0.1, #max(1,min(x$timeseries$ssb[1]/x$refpts[1,"k"],1),
+              up =0.8, #min(x$timeseries$ssb[1]/x$refpts[1,"k"],1),
+              step=0),
+      lt=list(low  =0.1, #rev(x$timeseries$ssb)[1]/x$refpts[1,"k"]*0.5,
+              up   =0.8, #rev(x$timeseries$ssb)[1]/x$refpts[1,"k"]*2.0,
+              refyr=max(x$timeseries$year)),sigv=0,
+      k=list(dist="unif",low=k*0.1,up=k*10),
+      r=list(dist="unif",low=r*0.1,up=r*10),
+      M=list(dist="unif",mean=0.2,up=0.2,mean=0.00,sd=0.00),
+      nsims=30000,
+      graphs=NULL)
+
+  fit})
+
+save(cmsy10,file="../results/jabbaCMSY10Results.RData")
+```
+
+```{r}
+load("../results/jabbaBDResults.RData")  
+load("../results/jabbaBD4Results.RData")  
+load("../results/jabbaSRAResults.RData")
+load("../results/jabbaSRPResults.RData")
+load("../results/jabbaCMSYResults.RData")  
+
+bd=ldply(bds,function(x){
+  if (is.null(x)) return(NULL)
+  subset(x$results,variable%in%c("b_div_bmsy","b"))})
+
+bd4=ldply(bd4,function(x){
+  if (is.null(x)) return(NULL)
+  subset(x$results,variable%in%c("b_div_bmsy","b"))})
+
+sra=ldply(sras,function(x){
+  if (is.null(x)) return(NULL)
+  subset(x$results,variable%in%c("b_div_bmsy","b"))})
+
+srp=ldply(srap,function(x){
+  if (is.null(x)) return(NULL)
+  subset(x$results,variable%in%c("b_div_bmsy","b"))})
+
+cmsy.bmsy=ldply(cmsy,function(x){
+  dt=cbind(x$timeseries,bmsy=rep(x$Values$Bmsy,rep=length(unique(x$timeseries$year))))
+  ddply(dt, .(flag,year), with, quantile(value/bmsy,probs=c(0.975,0.945,0.5,0.045,0.025)))
+  })
+names(cmsy.bmsy)[c(5:7)]=c("upper","mean","lower")
+
+cmsy.b=ldply(cmsy,function(x){
+  dt=cbind(x$timeseries,bmsy=rep(x$Values$Bmsy,rep=length(unique(x$timeseries$year))))
+  ddply(dt, .(flag,year), with, quantile(value,probs=c(0.975,0.945,0.5,0.045,0.025)))
+  })
+names(cmsy.b)[c(5:7)]=c("upper","mean","lower")
+
+dat=rbind.fill(cbind(Model="Catch & Index",        bd),
+               cbind(Model="Catch & Index Error",  bd4),
+               cbind(Model="Catch & Heuristics",   sra),
+               cbind(Model="Catch & Priors",       srp),
+               cbind(Model="Catch-MSY",  subset(cmsy.b,   flag==1),variable="b"),
+               cbind(Model="Catch-MSY",  subset(cmsy.bmsy,flag==1),variable="b_div_bmsy"))[c(1:4,6:8)]
+
+save(dat,file="../results/jbAll.RData")
+```
+
+
+```{r}
+ggplot( subset(dat,variable=="b"))+   
+  geom_ribbon(aes(year,ymax=upper,ymin=lower),fill="red",alpha=0.25)+
+  geom_line(aes(year,mean),col="red")+
+  geom_line(aes(year,b),data=jb)+
+  facet_grid(stk~Model,scale="free")+
+  xlab("Biomass")+ylab("Year")+
+  theme_bw()  
+```
+
+**Figure `r iFig=iFig+1; iFig`** Absolute trends in abundance for all stocks and methods (black line are the true values).
+
+
+```{r}
+ggplot( subset(dat,variable!="b"))+ 
+  geom_ribbon(aes(year,ymax=upper,ymin=lower),fill="red",alpha=0.25)+
+  geom_line(aes(year,mean),col="red")+
+  geom_line(aes(year,b_div_bmsy),data=jb)+
+  facet_grid(stk~Model,scale="free")+
+  xlab("Biomass")+ylab("Year")+
+  theme_bw()  
+```
+
+**Figure `r iFig=iFig+1; iFig`** Trends in abundance relative to $B/B_{MSY}$ for all stocks and methods (black line are the true values).
+
+```{r}
+load("../results/jbAll.RData")
+
+ggplot(ddply(subset(dat,variable!="b"),.(stk,variable), subset, year>max(year)-9))+ 
+  geom_hline(aes(yintercept=1))+
+  geom_ribbon(aes(year,ymax=upper,ymin=lower),fill="red",alpha=0.25)+
+  geom_line(aes(year,mean),col="red")+
+  geom_line(aes(year,b_div_bmsy),data=ddply(jb,.(stk), subset, year>max(year)-9))+
+  facet_grid(stk~Model)+
+  xlab(expression(B:B[MSY]))+ylab("Year")+
+  theme_bw()  
+```
+
+**Figure `r iFig=iFig+1; iFig`** Trends relative to $B/B_{MSY}$ in last 10 years using all the data.
+
+
+## 10 Years
+
+```{r}
+load("../results/jabbaBD10Results.RData")
+load("../results/jabbaBD410Results.RData")  
+load("../results/jabbaSRA10Results.RData")
+load("../results/jabbaSRP10Results.RData")
+load("../results/jabbaCMSY10Results.RData")  
+  
+bd=ldply(bd10,function(x){
+  if (is.null(x)) return(NULL)
+  subset(x$results,variable%in%c("b_div_bmsy","b"))})
+
+bd4=ldply(bd410,function(x){
+  if (is.null(x)) return(NULL)
+  subset(x$results,variable%in%c("b_div_bmsy","b"))})
+
+sra=ldply(sras10,function(x){
+  if (is.null(x)) return(NULL)
+  subset(x$results,variable%in%c("b_div_bmsy","b"))})
+
+srp=ldply(srap10,function(x){
+  if (is.null(x)) return(NULL)
+  subset(x$results,variable%in%c("b_div_bmsy","b"))})
+
+cmsy.bmsy=ldply(cmsy10,function(x){
+  dt=cbind(x$timeseries,bmsy=rep(x$Values$Bmsy,rep=length(unique(x$timeseries$year))))
+  ddply(dt, .(flag,year), with, quantile(value/bmsy,probs=c(0.975,0.945,0.5,0.045,0.025)))
+  })
+names(cmsy.bmsy)[c(5:7)]=c("upper","mean","lower")
+
+cmsy.b=ldply(cmsy10,function(x){
+  dt=cbind(x$timeseries,bmsy=rep(x$Values$Bmsy,rep=length(unique(x$timeseries$year))))
+  ddply(dt, .(flag,year), with, quantile(value,probs=c(0.975,0.945,0.5,0.045,0.025)))
+  })
+names(cmsy.b)[c(5:7)]=c("upper","mean","lower")
+
+dat10=rbind.fill(cbind(Model="Catch & Index",        bd),
+                 cbind(Model="Catch & Index Error",  bd4),
+                 cbind(Model="Catch & Heuristics",   sra),
+                 cbind(Model="Catch & Priors",       srp),
+                 cbind(Model="Catch-MSY",   subset(cmsy.b,   flag==1),variable="b"),
+                 cbind(Model="Catch-MSY",   subset(cmsy.bmsy,flag==1),variable="b_div_bmsy"))[c(1:4,6:8)]
+
+save(dat10,file="../results/jb10.RData")
+```
+
+
+```{r}
+ggplot(ddply(subset(dat10,variable!="b"),.(stk,variable), subset, year>max(year)-9))+   
+  geom_hline(aes(yintercept=1))+
+  geom_ribbon(aes(year,ymax=upper,ymin=lower),fill="blue",alpha=0.25)+
+  geom_line(aes(year,mean),col="blue")+
+  geom_line(aes(year,b_div_bmsy),data=ddply(jb,.(stk), subset, year>max(year)-9))+
+  facet_grid(stk~Model)+
+  xlab(expression(B:B[MSY]))+ylab("Year")+  
+  theme_bw()
+```
+
+**Figure `r iFig=iFig+1; iFig`** Trends relative to $B/B_{MSY}$ in last 10 years using truncated data.
+
+
+```{r}
+load("../results/jb10.RData")  
+  
+dt10=ddply(subset(dat10,variable!="b"),.(stk,variable), subset, year>max(year)-9)
+
+ggplot(ddply(subset(dat,variable!="b"),.(stk,variable), subset, year>max(year)-9))+ 
+  geom_hline(aes(yintercept=1))+
+  geom_ribbon(aes(year,ymax=upper,ymin=lower),fill="red",alpha=0.25)+
+  geom_line(aes(year,mean),col="red")+
+  geom_ribbon(aes(year,ymax=upper,ymin=lower),fill="blue",alpha=0.25,data=dt10)+
+  geom_line(aes(year,mean),col="blue",data=dt10)+
+  geom_line(aes(year,b_div_bmsy),data=ddply(jb,.(stk), subset, year>max(year)-9))+
+  facet_grid(stk~Model)+
+  xlab(expression(B:B[MSY]))+ylab("Year")+
+  theme_bw()
+```
+
+**Figure `r iFig=iFig+1; iFig`** Trends relative to $B/B_{MSY}$ in last 10 years compared for all and truncated data.
+
+
+## Indicators
+```{r}
+twothree<-function(x,n1=2,n2=3){
+    
+  if (length(x)<n1+n2) return(NULL)
+  
+  mean(x[length(x)-seq(n1)+1])/mean(x[length(x)-(n1+n2):n2+1])}
+
+trend<-function(x,n=10){
+    
+    if (length(x)<n) return(NA)
+    
+    y=x[length(x)-(n:1)+1]
+    y=y/mean(y)
+    
+    if (any(is.na(x))) return(NA)
+    
+    lm(y~x,data=data.frame(x=seq(n),y=y))$coef[2]}
+```
+
+
+```{r}
+load("../data/om.RData")  
+load("../results/jb10.RData")
+res<-cbind("Yrs"="10",dat10)
+load("../results/jbAll.RData")
+res<-rbind(res,cbind("Yrs"="All",dat))
+res=res[,c("Yrs","Model","stk","mean","year")]
+names(res)[4]="bbmsy"
+om=cbind(Model="OM",subset(om,OM=="Jabba")[,c("stk","bbmsy","year")])
+res=rbind(res,cbind(Yrs=10,om),cbind(Yrs="All",om))
+```
+
+```{r}
+tab=ddply(res, .(stk,Model,Yrs), with, rbind(c(variable="t23",value=twothree(bbmsy,5)),
+                                             c(variable="t5", value=trend(   bbmsy,5))))
+tab$value=as.numeric(as.character(tab$value))
+  
+signif(cast(tab,variable+Model~stk~Yrs),2)
+```
+
+
+```{r}
+write.csv(tab,file="../tex/tab.cvs")  
+```
