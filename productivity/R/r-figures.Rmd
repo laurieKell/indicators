@@ -1,0 +1,234 @@
+---
+title: "SC-ECO"
+subtitle: "Productivity Analysis"
+author: "L Kell"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: word_document
+github_document: 
+   mathjax: TRUE 
+---
+
+## Objective
+
+Compare different ways to estimate productivity for **data poor** stocks and compare with estimates from **data rich** assessments.
+
+## Data Rich Assessments
+
++ Use data rich assessments from the Myers legacy database to sumarise reference points, i.e. $MSY$, $F_{MSY}$, $B_{MSY}$, and $K$.
++ Use the reference points to estimate the Pella-Tomlinson production functions and hence $r$ and the shape of the production function ($p$).
+
+### Life History characteristics
+
++ A number of life history characteristics have been used as proxies for productivity, i.e.
+   + Maximum Size ($L_{max}$)	<110 cm	110–200	>200 cm
+   + von Bertalanffy growth coefficient ($k$)	>0.36	0.27–0.36	<0.27
+   + Size at first maturity ($L_{50}$)	<54	54–105	>105 
+   + Maximum age ($T_{max}$)	<8	8–14	>14 
+   + $L_{50}/L_{max}$	<0.51	0.51–0.55	>0.55
+   + Fecundity (Fec)	>2.88	1.03–2.88	<1.03 
+   + $r$	>0.48	0.26–0.38	<0.38
+
++ Use life history parameters from Fish Base, and identify cases where $L_{\infty}$, $k$, $L_{mat}$, and $b$ from the length weight relationship are available and then calculate $r$ under a variety of assumptions and compare to $F_{MSY}$ and $r$ from the data rich case studies.
++ Scenarios corresponding to steepness ($h$), selection pattern (dome shaped, flat) and $M$.
+
+### Productivity Proxies
+
++ Compare life history parameters and estimates of $r$ with **Data Rich** estimates to develop a robust proxy for productivity.
+
+
+```{r, knitr, eval=TRUE, echo=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(knitr)
+
+opts_chunk$set(comment   =NA, 
+               warning   =FALSE, 
+               message   =FALSE, 
+               error     =FALSE, 
+               echo      =FALSE,
+               fig.width =8, 
+               fig.height=8,
+               cache     =TRUE, 
+               fig.path  ="../tex/p-",
+               cache.path="cache/unassessed/p/")
+
+iFig=0
+iTab=0
+```
+```{r, pkgs}  
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(reshape)
+
+library(FLCore)
+library(FLBRP)
+library(FLasher)
+library(ggplotFL)
+library(FLife)
+library(randtests)
+
+library(mvtnorm)
+
+library(GGally)
+library(mydas)
+library(popbio)
+
+library(dendextend)
+
+library(doParallel)
+library(foreach)
+```
+
+
+```{r, myers}
+load("/home/laurence-kell/Desktop/papers/data-poor/data/DBdata.RData")
+
+names(stock)[3]="species"
+msy=subset(bioparams,bioid%in%c("SSBmsy-MT","MSY-MT","SSB0-MT"))
+msy=cast(msy,stockid+assessid~bioid,value="biovalue")
+names(msy)[3:5]=c("msy","K","bmsy")
+
+msy=mutate(msy, msy=as.numeric(as.character( msy)),
+                bmsy=as.numeric(as.character(bmsy)),
+                hmsy=msy/bmsy)
+msy=merge(msy,stock)
+msy=subset(msy,!is.na(hmsy))
+
+msy$K=as.numeric(as.character(msy$K))
+msy$shape=msy$bmsy/msy$K
+msy=adply(msy, 1, function(x) data.frame(p=optimise(function(x,y) (y-(1/(1+x))^(1/x))^2,c(-0.9999,10),y=x$shape)$minimum))
+msy=transform(msy,r=(1+p)*(msy/bmsy))
+
+msy=subset(msy,!is.na(K))
+msy$species=as.character(msy$species)
+
+save(msy,file="../data/msy.RData")
+```
+
+
+```{r, lh}
+load("/home/laurence-kell/Desktop/papers/data-poor/data/fb.RData")
+lh=merge(msy,fb,by="species")
+lh[is.na(lh["lmat"]),"lmat"]=(lh[is.na(lh["lmat"]),"lmatmin"]+lh[is.na(lh["lmat"]),"lmatmax"])/2
+lh$t0[lh$t0>=0]=NA
+lh=ddply(lh,.(species), with, data.frame(k   =mean(k,   na.rm=T),
+                                         linf=mean(linf,na.rm=T),
+                                         t0  =mean(t0,  na.rm=T),
+                                         l50 =mean(lmat,na.rm=T),
+                                         a50 =mean(amat,na.rm=T),
+                                         a   =mean(a,   na.rm=T),
+                                         b   =mean(b,   na.rm=T)))
+```
+
+```{r}
+source('~/Desktop/flr/FLife/R/FLife-lhPar.R')
+
+popdyn2<-function(x) {
+  #n<<-n+1;print(n)
+  
+  if (is.na(x["linf"])) return(NULL) 
+  
+  x=x[-1]
+  x=try(as(x[,names(x)[!is.na(x)]],"FLPar"))
+  
+  if ("try.error"%in%is(x)) return(NULL)
+  
+  x=lhPar(x)
+  x=try(popdyn(x))
+  
+  if ("try.error"%in%is(x)) return(NULL) else return(model.frame(x))}
+
+dat=merge(msy,lh)
+dat=dat[!duplicated(dat$species),]
+
+n=0
+pd=adply(dat[,c("species","linf","k","t0","a","b","l50","a50")],1,popdyn2)
+
+save(pd,file="/home/laurence-kell/Desktop/projects/indicators/productivity/data/pd.RData")
+```
+
+
+```{r}
+r=merge(msy[,c("species","K","bmsy","hmsy","shape","p","r")],pd,by="species")
+dat=r[,c("r.x","r.y","hmsy","linf","k","l50","shape")]
+names(dat)[1:2]=c("r","r.lh")
+
+ggpairs(log(transform(dat[,c("r","hmsy","shape","r.lh","linf","k","l50")],l50linf=l50/linf)))+
+  theme_bw()
+```
+
+**Figure `r iFig=iFig+1; iFig`** Relationships between $r$, $H_{MSY}$, and the shape of the Pella-Tomlinson production function from data rich assessments, with data poor estimates of $r$ (r.lh) and life history parameters $L_{\nfty}$, $k$ and $L_{50}/L_{\infty}$.
+ 
+
+```{r, scenarios}
+design=data.frame(s      =c( 0.9, 0.7,  0.9,  0.9,  0.9,  0.9),
+                  sel2   =c( 1.0, 1.0,  5000, 1.0,  1.0,  1.0),
+                  sel3   =c(5000, 5000, 5000, 50,   5000, 5000),
+                  m2     =c(1,    1,    1,    1,    0.9,  1.1))
+```
+
+
+```{r, run}
+r2=ddply(r[!duplicated(r$species),], .(species), with, {
+  pars        =c(linf=linf,k=k,t0=t0,a=a,b=b,l50=l50)
+  pars        =lhPar(FLPar(pars))
+  pars        =propagate(pars,dim(design)[1])
+  pars["s"]   =design[,"s"]
+  pars["sel2"]=design[,"sel2"]
+  pars["sel3"]=design[,"sel3"]
+  pars["m2"]  =pars["m2"]*design[,"m2"]
+  
+  eq=lhEql(pars)
+
+  #if (!("try-error"%in%is(eq))) 
+  data.frame(species=species,r=mdply(data.frame(i=seq(dim(design)[1])),function(i) 
+       log(lambda(leslie(eq,fbar=c(refpts(eq)["crash","harvest",i]))[,,i,drop=TRUE])))[,2],
+       design)
+  })
+
+save(r2,file="/home/laurence-kell/Desktop/projects/indicators/productivity/data/r2.RData")
+```
+
+
+```{r, lh.r}
+#load("/home/laurence-kell/Desktop/projects/indicators/productivity/data/r2.RData")
+dat=as.data.frame(t(array(r2$r,c(dim(r2)[2],dim(r2)[1]/dim(r2)[2]))))
+
+names(dat)=c("Base","h=0.7","flat","dome","low M","high M")
+
+ggpairs(log(dat))+
+  theme_bw()  
+```
+
+**Figure `r iFig=iFig+1; iFig`** Relationship between data poor estimates population growth rate ($r$) under the different scenarios.
+
+```{r}
+dat=merge(msy,r2,by="species",all=TRUE)
+dat=cbind(scen=seq(6),subset(dat,!is.na(r.x)&!is.na(r.y)))
+
+ggplot(dat)+geom_histogram(aes(r.y,fill=hmsy<0.2))+
+  facet_grid(scen~.)+
+  xlab("r")+ylab("Frequency")
+```
+
+**Figure `r iFig=iFig+1; iFig`** Estimates of $r$ for data poor scenarios, colours compare with $H_{MSY}$.
+
+
+\newpage
+## Software Versions
+
+* `r version$version.string`
+* FLCore:    `r packageVersion('FLCore')`
+* FLBRP:     `r packageVersion('FLBRP')`
+* FLasher:   `r packageVersion('FLasher')`
+* FLife:     `r packageVersion('FLife')`
+* mydas:     `r packageVersion('mydas')`
+* **Compiled**: `r date()`
+
+## Author information
+
+**Laurence Kell**. laurie@seaplusplus.es
+
+# References {#References}
+  

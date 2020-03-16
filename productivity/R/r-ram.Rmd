@@ -1,0 +1,211 @@
+---
+title: "SC-ECO"
+subtitle: "Population growth rate (r)"
+author: "L Kell"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: word_document
+github_document: 
+   mathjax: TRUE 
+---
+
+```{r, knitr, eval=TRUE, echo=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(knitr)
+
+opts_chunk$set(comment   =NA, 
+               warning   =FALSE, 
+               message   =FALSE, 
+               error     =FALSE, 
+               echo      =FALSE,
+               fig.width =8, 
+               fig.height=8,
+               cache     =TRUE, 
+               fig.path  ="../tex/ram-",
+               cache.path="cache/unassessed/ram/")
+
+iFig=0
+iTab=0
+```
+```{r, pkgs}  
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(reshape)
+
+library(FLCore)
+library(FLBRP)
+library(FLasher)
+library(ggplotFL)
+library(FLife)
+library(randtests)
+
+library(mvtnorm)
+
+library(GGally)
+library(mydas)
+library(popbio)
+
+library(dendextend)
+
+library(doParallel)
+library(foreach)
+```
+
+
+```{r, paper-om, fig.height=6, eval=FALSE}
+sim<-function(x,niters=500,se=0.1){
+  
+  mn=aaply(x,1,mean, na.rm=TRUE)
+  sd=aaply(x,1,var,  na.rm=TRUE)^0.5
+  n =aaply(x,1,function(x) sum(!is.na(x)))
+  se=sd/n^0.5
+  
+  if (any(is.na(se))) se[is.na(se)]=se
+  
+  y=data.frame(mn=mn,se=se)
+  y=mdply(y,function(mn,se) rnorm(niters,mn,se))[,-(1:2)]
+  
+  res=FLPar(array(unlist(c(y)),c(dim(x)[1],niters)))
+  
+  dimnames(res)$params=names(mn)
+  
+  res}
+
+cor=cor(model.frame(lh)[,c("linf","k","l50","t0","a","b","l50linf")],
+        use="pairwise.complete.obs")
+lhs=daply(lh,.(species), with, 
+             FLPar(linf=linf,k=k,t0=t0,l50=l50,a=a,b=b,bg=b,l50linf=l50/linf))
+```
+
+```{r}
+load("/home/laurence-kell/Desktop/papers/data-poor/data/DBdata.RData")
+load("/home/laurence-kell/Desktop/papers/data-poor/data/fb.RData")
+```
+
+
+```{r, msy}
+names(stock)[3]="species"
+msy=subset(bioparams,bioid%in%c("SSBmsy-MT","MSY-MT","SSB0-MT"))
+msy=cast(msy,stockid+assessid~bioid,value="biovalue")
+names(msy)[3:5]=c("msy","K","bmsy")
+
+msy=mutate(msy, msy=as.numeric(as.character( msy)),
+                bmsy=as.numeric(as.character(bmsy)),
+                hmsy=msy/bmsy)
+msy=merge(msy,stock)
+msy=subset(msy,!is.na(hmsy))
+
+msy$K=as.numeric(as.character(msy$K))
+msy$shape=msy$bmsy/msy$K
+msy=adply(msy, 1, function(x) data.frame(p=optimise(function(x,y) (y-(1/(1+x))^(1/x))^2,c(-0.9999,10),y=x$shape)$minimum))
+msy=transform(msy,r=(1+p)*(msy/bmsy))
+
+msy=subset(msy,!is.na(K))
+msy$species=as.character(msy$species)
+
+save(msy,file="../data/msy.RData")
+```
+
+```{r, lh}
+ref=merge(msy,fb,by="species")
+ref[is.na(ref["lmat"]),"lmat"]=(ref[is.na(ref["lmat"]),"lmatmin"]+ref[is.na(ref["lmat"]),"lmatmax"])/2
+
+lh=ddply(ref,.(species), with, data.frame(k   =mean(k,   na.rm=T),
+                                          linf=mean(linf,na.rm=T),
+                                          t0  =mean(t0,  na.rm=T),
+                                          l50 =mean(lmat,na.rm=T),
+                                          a50 =mean(amat,na.rm=T),
+                                          a   =mean(a,   na.rm=T),
+                                          b   =mean(b,   na.rm=T)))
+
+lh=subset(lh,!is.na(a)&t0<0&!is.na(l50))
+```
+
+
+```{r}
+source('~/Desktop/flr/FLife/R/FLife-lhPar.R', echo=TRUE)
+
+popdyn2<-function(x) {
+  n<<-n+1
+  
+  if (is.na(x["linf"])) return(NULL) 
+  
+  x=x[-1]
+  x=try(as(x[,names(x)[!is.na(x)]],"FLPar"))
+  
+  if ("try.error"%in%is(x)) return(NULL)
+  
+  x=lhPar(x)
+  x=try(popdyn(x))
+  
+  if ("try.error"%in%is(x)) return(NULL) else return(model.frame(x))}
+
+n=0
+pd=adply(lh[,c("species","linf","k","t0","a","b","l50")],1,popdyn2)
+
+save(pd,file="../data/pd.RData")
+```
+
+```{r}
+r=merge(msy[,c("species","K","bmsy","hmsy","shape","p","r")],pd,by="species")
+dat=r[,c("r.x","r.y","hmsy","linf","k","shape")]
+names(dat)[1:2]=c("r","r.lh")
+
+ggpairs(dat[,c("r","hmsy","shape","r.lh","linf","k")])+
+  theme_bw()
+```
+
+**Figure `r iFig=iFig+1; iFig`** Relationship between population growth rate ($r.lh$) based on life history parameters alone and values from data rich assessments.
+ 
+
+```{r}
+r2=transform(r, r.lh =order(r.y),
+                r    =order(r.x),
+                hmsy =order(hmsy),
+                linf =order(linf),
+                k    =order(k),
+                shape=order(shape))
+ggpairs(r2[,c("r","hmsy","shape","r.lh","linf","k")])+
+  theme_bw()
+```
+
+**Figure `r iFig=iFig+1; iFig`** Relationship between population growth rate ($r$) and life history parameters and assessment outputs.
+
+
+```{r, eval=FALSE}
+ts=subset(timeseries,assessid%in%unique(msy$assessid)&!is.na(tsvalue))
+ts=cast(ts,assessid+tsyear~tsid,value="tsvalue")
+names(ts)[2:4]=c("year","ssb","catch")
+
+pe=merge(msy[,c("species","assessid","r","K","p")],ts,by="assessid")
+pe=subset(pe,!is.na(K))
+pe=ddply(pe,.(assessid,species), with, {b=c((ssb[-1]+ssb[-length(ssb)])/2,NA); 
+                                 data.frame(year =year,
+                                            ssb  =ssb,
+                                            K    =K,
+                                            catch=catch,
+                                            sp   =r/p*b*(1-(b/K)^p),
+                                            pe   =c(ssb[-1],NA)-c(ssb[-length(ssb)],NA)+catch+r/p*b*(1-(b/K)^p))})
+
+save(pe,file="../data/pe.RData")
+```
+
+
+\newpage
+## Software Versions
+
+* `r version$version.string`
+* FLCore:    `r packageVersion('FLCore')`
+* FLBRP:     `r packageVersion('FLBRP')`
+* FLasher:   `r packageVersion('FLasher')`
+* FLife:     `r packageVersion('FLife')`
+* mydas:     `r packageVersion('mydas')`
+* **Compiled**: `r date()`
+
+## Author information
+
+**Laurence Kell**. laurie@seaplusplus.es
+
+# References {#References}
+  
